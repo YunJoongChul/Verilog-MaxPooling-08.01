@@ -35,7 +35,7 @@ reg [6:0] max1, max2, max3, max4, max_result1, max_result2, max_out;
 reg wea_out;
 blk_mem_gen_0  u0( .clka(clk),.wea(wea), .addra(addra), .dina(dina), .douta(data_out)); 
 blk_mem_gen_1  u1( .clka(clk), .wea(wea_out), .addra(addr_out), .dina(max_out), .douta(dout)); 
-localparam IDLE = 4'd0,  DELAY1 = 4'd1, DELAY2 = 4'd2, MAX1 = 4'd3, MAX2 = 4'd4, MAX3 = 4'd5, MAX4 = 4'd6, DELAY3 = 4'd7, DELAY4 = 4'd8, DONE = 4'd9;
+localparam IDLE = 4'd0,  MAXPOOLING_COL1  = 4'd1, MAXPOOLING_COL2  = 4'd2, MAXPOOLING_ROW1 = 4'd3, MAXPOOLING_ROW2  = 4'd4, DONE = 4'd5;
 
 always@(posedge clk or posedge rst)
 begin
@@ -43,11 +43,11 @@ begin
         state <= IDLE;
     else
         case(state)
-        IDLE : if(start) state <=  DELAY1; else state <= IDLE;
-        DELAY1 : state <= DELAY2;
-        DELAY2 : state <= MAX1;
-        MAX1 : state <=  MAX2;
-        MAX2 : if(addr_out == 24) state <=  DONE; else state <= DELAY1;
+        IDLE : if(start) state <= MAXPOOLING_COL1 ; else state <= IDLE;
+        MAXPOOLING_COL1 : state <= MAXPOOLING_COL2;
+        MAXPOOLING_COL2 : state <= MAXPOOLING_ROW1;
+        MAXPOOLING_ROW1: state <=  MAXPOOLING_ROW2 ;
+        MAXPOOLING_ROW2 : if(addr_out == 24) state <=  DONE; else state <= MAXPOOLING_COL1;
         DONE : state <= IDLE;
         default : state <= IDLE;
         endcase
@@ -60,7 +60,7 @@ begin
         cnt_col1 <= 7'd0;
     else
         case(state)
-            MAX2 : if(cnt_col1 == 8) cnt_col1 <= 0; else cnt_col1 <= cnt_col1 + 2'd2;
+            MAXPOOLING_ROW2  : if(cnt_col1 == 8) cnt_col1 <= 0; else cnt_col1 <= cnt_col1 + 2'd2;
             default : cnt_col1 <= cnt_col1;
             endcase
 end
@@ -72,7 +72,7 @@ begin
         cnt_row1 <= 7'd0;
     else
         case(state)
-              MAX2 : if(cnt_row1 == 100) cnt_row1 <= 0; else if(cnt_col1 == 8) cnt_row1 <= cnt_row1 + 5'd20; else cnt_row1 <= cnt_row1;
+             MAXPOOLING_ROW2 : if(cnt_row1 == 100) cnt_row1 <= 0; else if(cnt_col1 == 8) cnt_row1 <= cnt_row1 + 5'd20; else cnt_row1 <= cnt_row1;
             default : cnt_row1 <= cnt_row1;
             endcase
 end
@@ -87,10 +87,10 @@ begin
         addra <= 7'd0;
     else
         case(state)
-        DELAY1 : addra <= cnt_row1 + cnt_col1;
-        DELAY2 : addra <= cnt_row1 + cnt_col1 + 1'd1;
-        MAX1 : addra <= cnt_row1 + cnt_col1  + 4'd10;
-        MAX2 : addra <= cnt_row1 + cnt_col1  + 4'd11;
+        MAXPOOLING_COL1 : addra <= cnt_row1 + cnt_col1;
+        MAXPOOLING_COL2 : addra <= cnt_row1 + cnt_col1 + 1'd1;
+        MAXPOOLING_ROW1 : addra <= cnt_row1 + cnt_col1  + 4'd10;
+        MAXPOOLING_ROW2 : addra <= cnt_row1 + cnt_col1  + 4'd11;
         default : addra <= addra;
         endcase
 end
@@ -102,9 +102,9 @@ begin
     else
         case(state)
         IDLE : cnt_control <= 0;
-        DELAY1 : if(addra != 0) cnt_control <= cnt_control + 1; else cnt_control <= 0;
-        DELAY2 : if(addra != 0) cnt_control <= cnt_control + 1; else cnt_control <= 0;
-        MAX1 : if(cnt_control == 4) cnt_control <= 1; else cnt_control <= cnt_control + 1;
+        MAXPOOLING_COL1 : if(addra != 0) cnt_control <= cnt_control + 1; else cnt_control <= 0;
+        MAXPOOLING_COL2 : if(addra != 0) cnt_control <= cnt_control + 1; else cnt_control <= 0;
+        MAXPOOLING_ROW1 : if(cnt_control == 4) cnt_control <= 1; else cnt_control <= cnt_control + 1;
         default : cnt_control <= cnt_control + 1;
         endcase
 end
@@ -155,7 +155,7 @@ begin
     max_result1 <= 0;
    else
      case(state)
-     MAX2 : max_result1 <= (max1 > max2) ? max1 : max2;
+     MAXPOOLING_ROW2 : max_result1 <= (max1 > max2) ? max1 : max2;
      default max_result1 <= max_result1;
      endcase
 end
@@ -166,7 +166,7 @@ begin
     max_result2 <= 0;
    else
      case(state)
-     MAX2 : max_result2 <= (max3 > max4) ? max3 : max4;
+     MAXPOOLING_ROW2 : max_result2 <= (max3 > max4) ? max3 : max4;
      default max_result2 <= max_result2;
      endcase
 end
@@ -176,7 +176,7 @@ begin
     max_out <= 0;
    else
      case(state)
-     MAX2 : max_out <= (max_result1 > max_result2) ? max_result1 : max_result2;
+     MAXPOOLING_ROW2 :  max_out <= (max_result1 > max_result2) ? max_result1 : max_result2;
      default max_out <= max_out;
      endcase
 end
@@ -186,7 +186,7 @@ begin
     addr_out <= 0;
     else
     case(state)
-    MAX2 :if(cnt_col1 < 4 && cnt_row1 == 0 ) addr_out <= 0; else if(addr_out == 25) addr_out <= 0; else addr_out <= addr_out + 1;
+    MAXPOOLING_ROW2 : if(addr_out == 24) addr_out <= 0; else if(cnt_col1 < 6 && cnt_row1 == 0 &&addr_out != 23 ) addr_out <= 0; else addr_out <= addr_out + 1;
     default addr_out <= addr_out;
     endcase
 end
@@ -196,7 +196,7 @@ begin
       wea_out <= 0;
     else
        case(state)
-       MAX2: if(addr_out == 25) wea_out <= 0; else wea_out <= 1;
+       MAXPOOLING_ROW2 : if(addr_out == 24) wea_out <= 0; else wea_out <= 1;
        default : wea_out <= 0;
        endcase
 end 
